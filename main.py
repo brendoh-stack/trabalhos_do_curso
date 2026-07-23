@@ -1,53 +1,64 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-# Inicialização do app FastAPI
-app = FastAPI()
+# Inicialização com metadados personalizados da sua API de Tarefas
+app = FastAPI(
+    title="API de Tarefas",
+    description="Essa é uma API de tarefas, onde você pode adicionar, atualizar status, deletar e listar tarefas.",
+    version="1.0.0",
+    contact={
+        "name": "brendo henrique",
+        "email": "brendohenriquelopes@gmail.com"
+    }
+)
 
-# Passo 1: Criação do modelo Pydantic
+# Banco de dados simulado armazenando instâncias do tipo Tarefa
+minhas_tarefas = {}
+
+# Modelo de dados Pydantic com a estrutura solicitada
 class Tarefa(BaseModel):
     nome: str
     descricao: str
     concluida: bool = False
 
-# Passo 3: Lista de tarefas que agora armazena objetos do tipo Tarefa
-lista_de_tarefas: list[Tarefa] = []
+
+@app.get("/")
+def hello_world():
+    return {"Hello": "World!"}
 
 
-# Passo 4: Rota de Listar Tarefas (GET)
-@app.get("/tarefas", response_model=list[Tarefa])
+@app.get("/tarefas")
 def listar_tarefas():
-    # O FastAPI converte automaticamente os objetos Tarefa em JSON
-    return lista_de_tarefas
+    if not minhas_tarefas:
+        return {"message": "Não existe nenhuma tarefa cadastrada!"}
+    # O FastAPI serializa automaticamente os objetos Pydantic para JSON
+    return {"tarefas": minhas_tarefas}
 
 
-# Passo 2: Rota de Adicionar Tarefa (POST)
-@app.post("/tarefas", status_code=201)
-def adicionar_tarefa(tarefa: Tarefa):
-    # O FastAPI valida os dados automaticamente antes de entrar aqui
-    lista_de_tarefas.append(tarefa)
-    return {"mensagem": "Tarefa adicionada com sucesso!", "tarefa": tarefa}
-
-
-# Passo 5: Rota de Marcar como Concluída (PATCH/PUT)
-@app.patch("/tarefas/{nome}/concluir")
-def marcar_como_concluida(nome: str):
-    # Busca a tarefa na lista usando o campo 'nome' do modelo Pydantic
-    for tarefa in lista_de_tarefas:
-        if tarefa.nome.lower() == nome.lower():
-            tarefa.concluida = True
-            return {"mensagem": f"Tarefa '{tarefa.nome}' concluída!", "tarefa": tarefa}
+@app.post("/adiciona")
+def adicionar_tarefa(id_tarefa: int, tarefa: Tarefa):
+    if id_tarefa in minhas_tarefas:
+        raise HTTPException(status_code=400, detail="Essa tarefa já existe, meu parceiro!")
     
-    raise HTTPException(status_code=404, detail="Tarefa não encontrada")
+    # Armazena o próprio objeto (instância de Tarefa) diretamente
+    minhas_tarefas[id_tarefa] = tarefa
+    return {"mensagem": "Tarefa adicionada com sucesso!", "tarefa": minhas_tarefas[id_tarefa]}
 
 
-# Passo 5: Rota de Remover Tarefa (DELETE)
-@app.delete("/tarefas/{nome}")
-def remover_tarefa(nome: str):
-    # Busca e remove o objeto filtrando pelo campo 'nome'
-    for tarefa in lista_de_tarefas:
-        if tarefa.nome.lower() == nome.lower():
-            lista_de_tarefas.remove(tarefa)
-            return {"mensagem": f"Tarefa '{nome}' removida com sucesso!"}
-            
-    raise HTTPException(status_code=404, detail="Tarefa não encontrada")
+@app.patch("/concluir/{id_tarefa}")
+def marcar_como_concluida(id_tarefa: int):
+    if id_tarefa not in minhas_tarefas:
+        raise HTTPException(status_code=404, detail="Tarefa não encontrada!")
+    
+    # Altera o atributo do objeto usando a notação de ponto (.) em vez de colchetes
+    minhas_tarefas[id_tarefa].concluida = True
+    return {"mensagem": f"Tarefa {id_tarefa} concluída!", "tarefa": minhas_tarefas[id_tarefa]}
+
+
+@app.delete("/deletar/{id_tarefa}")
+def remover_tarefa(id_tarefa: int):
+    if id_tarefa not in minhas_tarefas:
+        raise HTTPException(status_code=404, detail="Tarefa não encontrada!")
+    
+    del minhas_tarefas[id_tarefa]
+    return {"mensagem": f"Tarefa {id_tarefa} removida com sucesso!"}
